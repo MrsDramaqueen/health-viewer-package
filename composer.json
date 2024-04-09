@@ -1,0 +1,15 @@
+{
+    "name": "forlab/health-viewer",
+    "autoload": {
+        "psr-4": {
+            "Forlab\\HealthViewer\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "MrsDramaqueen",
+            "email": "chelyaev_99@mail.ru"
+        }
+    ],
+    "require": {}
+}
