@@ -13,77 +13,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare test payload
-        run: |
-          echo "health-viewer-package ci upload test $(date -u +%Y-%m-%dT%H:%M:%SZ)" > test-payload.txt
-
-      - name: Get OIDC token
-        id: oidc
-        uses: actions/github-script@v7
-        with:
-          script: return await core.getIDToken('mpfit-wms-ci')
-
-      - name: Debug OIDC claims
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
-        run: |
-          python3 - <<'PY'
-          import base64, json, os
-          token = os.environ["OIDC_TOKEN"]
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-          data = json.loads(base64.urlsafe_b64decode(payload))
-          print("sub:", data.get("sub"))
-          print("aud:", data.get("aud"))
-          print("iss:", data.get("iss"))
-          print("token_length:", len(token))
-          header = token.split(".")[0]
-          header += "=" * (-len(header) % 4)
-          header_data = json.loads(base64.urlsafe_b64decode(header))
-          print("kid:", header_data.get("kid"))
-          print("alg:", header_data.get("alg"))
-          PY
-
-      - name: Verify OIDC token locally
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
-        run: |
-          python3 -m pip install --quiet PyJWT cryptography requests
-          python3 - <<'PY'
-          import base64, json, os, sys
-          import jwt
-          import requests
-
-          token = os.environ["OIDC_TOKEN"].strip()
-          jwks = requests.get(
-              "https://token.actions.githubusercontent.com/.well-known/jwks",
-              timeout=10,
-          ).json()
-          jwk_client = jwt.PyJWKClient("https://token.actions.githubusercontent.com/.well-known/jwks")
-          signing_key = jwk_client.get_signing_key_from_jwt(token)
-
-          jwt.decode(
-              token,
-              signing_key.key,
-              algorithms=["RS256"],
-              audience="mpfit-wms-ci",
-              issuer="https://token.actions.githubusercontent.com",
-          )
-          print("local_jwt_verify_ok")
-          PY
-
       - name: Upload file to WMS
         env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
           WMS_URL: ${{ secrets.WMS_UPLOAD_URL }}
         run: |
+          set -euo pipefail
+
           if [[ "${WMS_URL}" != https://* ]]; then
             echo "WMS_UPLOAD_URL must start with https://"
             exit 1
           fi
 
-          OIDC_TOKEN="$(printf '%s' "${OIDC_TOKEN}" | tr -d '[:space:]')"
-          echo "token_length_before_upload=${#OIDC_TOKEN}"
+          echo "health-viewer-package ci upload test $(date -u +%Y-%m-%dT%H:%M:%SZ)" > test-payload.txt
+
+          # Не передаём JWT между step'ами через outputs/env — GitHub может замaskить
+          # часть строки (***), и подпись станет невалидной.
+          OIDC_TOKEN=$(curl -fsSL \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=mpfit-wms-ci" \
+            | jq -r .value)
+
+          if [[ -z "${OIDC_TOKEN}" || "${OIDC_TOKEN}" == "null" ]]; then
+            echo "Failed to fetch OIDC token"
+            exit 1
+          fi
+
+          echo "token_length=${#OIDC_TOKEN}"
 
           curl -f -sS -D /tmp/wms-response-headers -o /tmp/wms-response-body -X PUT \
             -H "Authorization: Bearer ${OIDC_TOKEN}" \
