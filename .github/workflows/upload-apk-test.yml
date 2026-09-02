@@ -54,6 +54,9 @@ jobs:
             exit 1
           fi
 
+          OIDC_TOKEN="$(printf '%s' "${OIDC_TOKEN}" | tr -d '[:space:]')"
+          echo "token_length_before_upload=${#OIDC_TOKEN}"
+
           curl -f -sS -D /tmp/wms-response-headers -o /tmp/wms-response-body -X PUT \
             -H "Authorization: Bearer ${OIDC_TOKEN}" \
             -H "Content-Type: application/octet-stream" \
