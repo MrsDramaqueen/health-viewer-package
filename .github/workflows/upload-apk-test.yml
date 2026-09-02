@@ -44,6 +44,34 @@ jobs:
           print("alg:", header_data.get("alg"))
           PY
 
+      - name: Verify OIDC token locally
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
+        run: |
+          python3 -m pip install --quiet PyJWT cryptography requests
+          python3 - <<'PY'
+          import base64, json, os, sys
+          import jwt
+          import requests
+
+          token = os.environ["OIDC_TOKEN"].strip()
+          jwks = requests.get(
+              "https://token.actions.githubusercontent.com/.well-known/jwks",
+              timeout=10,
+          ).json()
+          jwk_client = jwt.PyJWKClient("https://token.actions.githubusercontent.com/.well-known/jwks")
+          signing_key = jwk_client.get_signing_key_from_jwt(token)
+
+          jwt.decode(
+              token,
+              signing_key.key,
+              algorithms=["RS256"],
+              audience="mpfit-wms-ci",
+              issuer="https://token.actions.githubusercontent.com",
+          )
+          print("local_jwt_verify_ok")
+          PY
+
       - name: Upload file to WMS
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
