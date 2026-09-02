@@ -36,6 +36,12 @@ jobs:
           print("sub:", data.get("sub"))
           print("aud:", data.get("aud"))
           print("iss:", data.get("iss"))
+          print("token_length:", len(token))
+          header = token.split(".")[0]
+          header += "=" * (-len(header) % 4)
+          header_data = json.loads(base64.urlsafe_b64decode(header))
+          print("kid:", header_data.get("kid"))
+          print("alg:", header_data.get("alg"))
           PY
 
       - name: Upload file to WMS
