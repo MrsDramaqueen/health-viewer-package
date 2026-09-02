@@ -59,6 +59,7 @@ jobs:
 
           curl -f -sS -D /tmp/wms-response-headers -o /tmp/wms-response-body -X PUT \
             -H "Authorization: Bearer ${OIDC_TOKEN}" \
+            -H "X-GitHub-Oidc-Token: ${OIDC_TOKEN}" \
             -H "Content-Type: application/octet-stream" \
             -H "ngrok-skip-browser-warning: 1" \
             --data-binary @test-payload.txt \
