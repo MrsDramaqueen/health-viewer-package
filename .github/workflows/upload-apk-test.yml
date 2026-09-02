@@ -23,14 +23,39 @@ jobs:
         with:
           script: return await core.getIDToken('mpfit-wms-ci')
 
+      - name: Debug OIDC claims
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os
+          token = os.environ["OIDC_TOKEN"]
+          payload = token.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          data = json.loads(base64.urlsafe_b64decode(payload))
+          print("sub:", data.get("sub"))
+          print("aud:", data.get("aud"))
+          print("iss:", data.get("iss"))
+          PY
+
       - name: Upload file to WMS
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.result }}
           WMS_URL: ${{ secrets.WMS_UPLOAD_URL }}
         run: |
-          curl -f -v -X PUT \
+          if [[ "${WMS_URL}" != https://* ]]; then
+            echo "WMS_UPLOAD_URL must start with https://"
+            exit 1
+          fi
+
+          curl -f -sS -D /tmp/wms-response-headers -o /tmp/wms-response-body -X PUT \
             -H "Authorization: Bearer ${OIDC_TOKEN}" \
             -H "Content-Type: application/octet-stream" \
             -H "ngrok-skip-browser-warning: 1" \
             --data-binary @test-payload.txt \
             "${WMS_URL}"
+
+          echo "--- response headers ---"
+          cat /tmp/wms-response-headers
+          echo "--- response body ---"
+          cat /tmp/wms-response-body
